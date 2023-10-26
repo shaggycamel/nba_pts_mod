@@ -2,25 +2,16 @@
 library(nba.dataRub)
 library(tidyverse)
 library(tidymodels)
+library(themis)
 library(baguette)
+library(discrim)
 library(doParallel)
 
 
-df_raw <- dh_getQuery(dh_createCon("postgres"), "SELECT * FROM nba.player_game_log WHERE season_type != 'All Star'") |> 
-  mutate(
-    next_pts = lead(pts, order_by = game_date), 
-    # team = str_sub(matchup, 1, 3),
-    # opponent = str_sub(matchup, str_locate(matchup, " @ | vs. ")[, "end"]),
-    # next_opponent = lead(opponent, order_by = game_date),
-    season_type = as.numeric(ordered(season_type, levels = c("Pre Season", "Regular Season", "Playoffs"))),
-    across(c(where(is.numeric), -next_pts), \(x) replace_na(x, 0)),
-    .by = player_id
-  ) |> 
-  filter(!is.na(next_pts))
-
-
-
 # Split Data --------------------------------------------------------------
+
+df_raw <- dh_getQuery(dh_createCon("postgres"), "train.sql") |> 
+  mutate(over_20_pts = as.factor(over_20_pts))
 
 df_split <- initial_split(df_raw)
 df_train <- training(df_split)
@@ -29,43 +20,56 @@ df_test <- testing(df_split)
 
 # Recipe ------------------------------------------------------------------
 
-rec <- recipe(data = df_train, next_pts ~ .) |> 
-  update_role(player_id, game_id, new_role = "id") |> 
-  step_rm(year_season, slug_season, video_available, matchup, game_date, wl) |> 
+rec_original <- recipe(data = df_train, over_20_pts ~ .) |> 
+  update_role(player_id, game_id, game_date, new_role = "id") |> 
   step_naomit(everything()) |> 
-  # probably should have a log step here too
-  step_range(c(all_numeric_predictors(), -season_type)) |> 
-  step_dummy(all_factor_predictors()) 
+  step_log(c(all_numeric_predictors(), -c(weight_kg, height_cm, avg_min, avg_plus_minus, ends_with("pct"))), offset = 1) |> 
+  step_range(all_numeric_predictors()) |> 
+  step_pca(all_numeric_predictors()) |> 
+  step_dummy(all_factor_predictors())
   
-  
-# view(x <- bake(prep(rec), new_data = NULL))
-recs <- mget(str_subset(objects(), "rec$"))
+rec_downsample <- step_downsample(rec_original, over_20_pts)
+rec_upsample <- step_upsample(rec_original, over_20_pts)
+rec_smote <- step_smotenc(rec_original, over_20_pts)
+
+recs <- mget(str_subset(objects(), "^rec_"))
+
+# x <- bake(prep(rec_original), new_data = NULL)
+# map(recs, \(x) count(bake(prep(x), new_data = NULL), over_20_pts))
 
 
 # Model Definitions -------------------------------------------------------
 
-# TAKE TOO LONG TO PROCESS 
-# boost_tree_xgboost_spec <- boost_tree(tree_depth = 30, trees = 500, learn_rate = tune(), min_n = 30, loss_reduction = tune(), sample_size = tune(), stop_iter = 5) |>
-#   set_engine("xgboost") |>
-#   set_mode("regression")
-# 
-# cubist_rules_Cubist_spec <- cubist_rules(committees = tune(), neighbors = tune(), max_rules = tune()) |>
-#   set_engine("Cubist")
-
 bag_mars_earth_spec <- bag_mars() |>
   set_engine("earth") |>
-  set_mode("regression")
+  set_mode("classification")
 
-linear_reg_glm_spec <- linear_reg() |>
+bag_tree_C5.0_spec <- bag_tree() |>
+  set_engine("C5.0") |>
+  set_mode("classification")
+
+boost_tree_xgboost_spec <- boost_tree(tree_depth = tune(), trees = tune(), learn_rate = tune(), min_n = tune(), loss_reduction = tune(), sample_size = tune(), stop_iter = 2) |>
+  set_engine("xgboost") |>
+  set_mode("classification")
+
+discrim_linear_MASS_spec <- discrim_linear() |>
+  set_engine("MASS")
+
+discrim_quad_MASS_spec <- discrim_quad() |>
+  set_engine("MASS")
+
+discrim_regularized_klaR_spec <- discrim_regularized(frac_common_cov = tune(), frac_identity = tune()) |>
+  set_engine("klaR")
+
+logistic_reg_glmnet_spec <- logistic_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet")
+
+logistic_reg_glm_spec <- logistic_reg() |>
   set_engine("glm")
 
-decision_tree_rpart_spec <- decision_tree(tree_depth = tune(), min_n = 30, cost_complexity = tune()) |>
-  set_engine("rpart") |>
-  set_mode("regression")
-
-rand_forest_ranger_spec <- rand_forest(mtry = tune(), min_n = tune()) |>
-  set_engine("ranger") |>
-  set_mode("regression")
+mars_earth_spec <- mars(prod_degree = tune()) |>
+  set_engine("earth") |>
+  set_mode("classification")
 
 mods <- mget(str_subset(objects(), "_spec$"))
 
@@ -73,39 +77,40 @@ mods <- mget(str_subset(objects(), "_spec$"))
 # Workflow ----------------------------------------------------------------
 
 # Register parallel backend
-# registerDoParallel(cores = parallel::detectCores(logical = FALSE))
-# 
-# # Tune models
-# cv_folds <- vfold_cv(df_train, v = 5)
-# wflows <- workflow_set(recs, mods) |>
-#   workflow_map(
-#     "tune_grid",
-#     resamples = cv_folds,
-#     grid = 10,
-#     verbose = TRUE,
-#     metrics = metric_set(mae, rmse, rsq),
-#     control = control_grid(parallel_over = "everything", verbose = TRUE)
-#   )
-# 
-# # Drop parallel (ie, re-register sequential processing)
-# registerDoSEQ()
-# save.image()
+registerDoParallel(cores = parallel::detectCores(logical = FALSE) / 2)
+
+# Tune models
+cv_folds <- vfold_cv(df_train, v = 5, strata = over_20_pts)
+wflows <- workflow_set(recs, mods) |>
+  workflow_map(
+    "tune_grid",
+    resamples = cv_folds,
+    grid = 10,
+    verbose = TRUE,
+    metrics = metric_set(npv, bal_accuracy),
+    control = control_grid(parallel_over = "everything", verbose = TRUE)
+  )
+
+# Drop parallel (ie, re-register sequential processing)
+registerDoSEQ()
+save.image()
 
 
 # Model Comparison --------------------------------------------------------
 
 autoplot(wflows)
-rank_results(wflows)
+view(rank_results(wflows))
 
 
 # Fit best model ----------------------------------------------------------
 
-mod_type <- "rec_rand_forest_ranger_spec"
+mod_type <- "rec_original_logistic_reg_glm_spec"
 best_wflow <- extract_workflow(wflows, mod_type)
 
+mod_metric <- "npv"
 best_mod <- wflows |> 
   extract_workflow_set_result(mod_type) |> 
-  select_best(metric = "mae")
+  select_best(metric = mod_metric)
   
 best_fit <- finalize_workflow(best_wflow, best_mod) |> 
   fit(data = df_train)
@@ -113,22 +118,12 @@ best_fit <- finalize_workflow(best_wflow, best_mod) |>
 
 # Test predictions --------------------------------------------------------
 
-df_test <- df_test |> 
-  mutate(
-    preds = predict(best_fit, df_test)[[1]],
-    pred_error = next_pts - preds
-  )
+df_test <- mutate(df_test, preds = predict(best_fit, df_test)[[1]])
 
+conf_mat(df_test, over_20_pts, preds)
+npv(df_test, over_20_pts, preds) # 3969 / (3969 + 1967) = 0.67
+bal_accuracy(df_test, over_20_pts, preds)
 
-# Results -----------------------------------------------------------------
-
-mae(df_test, next_pts, preds)
-hist(df_test$pred_error)
-
-pivot_longer(df_test, c(next_pts, preds), names_to = "dist") |> 
-  ggplot(aes(x = value, fill = dist)) +
-  geom_density(alpha = 0.3) +
-  geom_vline(xintercept = 20)
 
 
 # Extract model -----------------------------------------------------------
