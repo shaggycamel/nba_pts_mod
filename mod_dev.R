@@ -28,8 +28,6 @@ rec_original <- recipe(data = df_train, over_20_pts ~ .) |>
   step_pca(all_numeric_predictors()) |> 
   step_dummy(all_factor_predictors())
   
-rec_downsample <- step_downsample(rec_original, over_20_pts)
-rec_upsample <- step_upsample(rec_original, over_20_pts)
 rec_smote <- step_smotenc(rec_original, over_20_pts)
 
 recs <- mget(str_subset(objects(), "^rec_"))
@@ -44,32 +42,15 @@ bag_mars_earth_spec <- bag_mars() |>
   set_engine("earth") |>
   set_mode("classification")
 
-bag_tree_C5.0_spec <- bag_tree() |>
-  set_engine("C5.0") |>
-  set_mode("classification")
-
 boost_tree_xgboost_spec <- boost_tree(tree_depth = tune(), trees = tune(), learn_rate = tune(), min_n = tune(), loss_reduction = tune(), sample_size = tune(), stop_iter = 2) |>
   set_engine("xgboost") |>
   set_mode("classification")
-
-discrim_linear_MASS_spec <- discrim_linear() |>
-  set_engine("MASS")
-
-discrim_quad_MASS_spec <- discrim_quad() |>
-  set_engine("MASS")
-
-discrim_regularized_klaR_spec <- discrim_regularized(frac_common_cov = tune(), frac_identity = tune()) |>
-  set_engine("klaR")
 
 logistic_reg_glmnet_spec <- logistic_reg(penalty = tune(), mixture = tune()) |>
   set_engine("glmnet")
 
 logistic_reg_glm_spec <- logistic_reg() |>
   set_engine("glm")
-
-mars_earth_spec <- mars(prod_degree = tune()) |>
-  set_engine("earth") |>
-  set_mode("classification")
 
 mods <- mget(str_subset(objects(), "_spec$"))
 
