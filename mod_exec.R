@@ -13,20 +13,17 @@ best_fit <- readRDS("best_fit.RDS")
 
 # New data ----------------------------------------------------------------
 
-df_pred <- dh_getQuery(db_con, "pred_dataset.sql") |> 
-  mutate(
-    season_type = as.numeric(ordered(season_type, levels = c("Pre Season", "Regular Season", "Playoffs"))),
-    across(where(is.numeric), \(x) replace_na(x, 0))
-  )
+df_pred <- dh_getQuery(db_con, "pred_prep.sql")
 
 
 # Prediction --------------------------------------------------------------
 
 df_pred <- mutate(df_pred, next_pts_pred = predict(best_fit, df_pred)[[1]]) |> 
   left_join(
-    dh_getQuery(db_con, "SELECT team_slug, player_id FROM nba.team_roster WHERE slug_season = '2023-24'"),
+    dh_getQuery(db_con, "SELECT DISTINCT player, player_id FROM nba.team_roster"),
     by = join_by(player_id)
-  )
+  ) |> 
+  relocate(player, .before = player_id)
 
 
 # Ingestion ---------------------------------------------------------------

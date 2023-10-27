@@ -42,9 +42,9 @@ bag_mars_earth_spec <- bag_mars() |>
   set_engine("earth") |>
   set_mode("classification")
 
-boost_tree_xgboost_spec <- boost_tree(tree_depth = tune(), trees = tune(), learn_rate = tune(), min_n = tune(), loss_reduction = tune(), sample_size = tune(), stop_iter = 2) |>
-  set_engine("xgboost") |>
-  set_mode("classification")
+# boost_tree_xgboost_spec <- boost_tree(tree_depth = tune(), trees = tune(), learn_rate = tune(), min_n = tune(), loss_reduction = tune(), sample_size = tune(), stop_iter = 2) |>
+#   set_engine("xgboost") |>
+#   set_mode("classification")
 
 logistic_reg_glmnet_spec <- logistic_reg(penalty = tune(), mixture = tune()) |>
   set_engine("glmnet")
@@ -85,7 +85,7 @@ view(rank_results(wflows))
 
 # Fit best model ----------------------------------------------------------
 
-mod_type <- "rec_original_logistic_reg_glm_spec"
+mod_type <- "rec_original_logistic_reg_glmnet_spec"
 best_wflow <- extract_workflow(wflows, mod_type)
 
 mod_metric <- "npv"
@@ -102,7 +102,7 @@ best_fit <- finalize_workflow(best_wflow, best_mod) |>
 df_test <- mutate(df_test, preds = predict(best_fit, df_test)[[1]])
 
 conf_mat(df_test, over_20_pts, preds)
-npv(df_test, over_20_pts, preds) # 3969 / (3969 + 1967) = 0.67
+npv(df_test, over_20_pts, preds) # 2216 / (2216 + 717) = 0.76
 bal_accuracy(df_test, over_20_pts, preds)
 
 
