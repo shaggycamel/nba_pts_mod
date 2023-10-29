@@ -3,6 +3,7 @@ library(nba.dataRub)
 library(tidyverse)
 library(tidymodels)
 library(baguette)
+library(rules)
 library(doParallel)
 
 
@@ -12,7 +13,7 @@ library(doParallel)
 df_raw <- dh_getQuery(dh_createCon("postgres"), "train.sql")
 
 df_split <- initial_split(df_raw)
-df_train <- training(df_split) |> sample_n(9000)
+df_train <- training(df_split)
 df_test <- testing(df_split)
 
 
@@ -34,6 +35,13 @@ recs <- mget(str_subset(objects(), "^rec_"))
 
 # Model Definitions -------------------------------------------------------
 
+boost_tree_xgboost_spec <- boost_tree(tree_depth = tune(), trees = tune(), learn_rate = tune(), min_n = tune(), loss_reduction = tune(), sample_size = tune(), stop_iter = 2) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
+
+linear_reg_glmnet_spec <- linear_reg(penalty = tune(), mixture = tune()) |> 
+  set_engine("glmnet")
+
 bag_mars_earth_spec <- bag_mars() |>
   set_engine("earth") |>
   set_mode("regression")
@@ -43,10 +51,6 @@ linear_reg_glm_spec <- linear_reg() |>
 
 decision_tree_rpart_spec <- decision_tree(tree_depth = tune(), min_n = tune(), cost_complexity = tune()) |>
   set_engine("rpart") |>
-  set_mode("regression")
-
-rand_forest_ranger_spec <- rand_forest(mtry = tune(), min_n = tune()) |>
-  set_engine("ranger") |>
   set_mode("regression")
 
 mods <- mget(str_subset(objects(), "_spec$"))
@@ -82,7 +86,7 @@ view(rank_results(wflows))
 
 # Fit best model ----------------------------------------------------------
 
-mod_type <- "rec_original_bag_mars_earth_spec"
+mod_type <- "rec_original_boost_tree_xgboost_spec"
 best_wflow <- extract_workflow(wflows, mod_type)
 
 best_mod <- wflows |> 
@@ -98,14 +102,14 @@ best_fit <- finalize_workflow(best_wflow, best_mod) |>
 df_test <- df_test |> 
   mutate(
     preds = predict(best_fit, df_test)[[1]],
-    pred_error = pts - preds,
+    pred_diff = pts - preds,
     pred_bins = cut(preds, breaks = c(-10, 0, 10, 20, 30, 40))
   )
 
 # Results -----------------------------------------------------------------
 
 mae(df_test, pts, preds)
-hist(df_test$pred_error)
+hist(df_test$pred_diff)
 
 # Model is underpredicting when players score large, and
 # forecasted to be in the 20-30 bin
