@@ -3,17 +3,20 @@ library(nba.dataRub)
 library(dplyr)
 library(ggplot2)
 library(DT)
+library(shinycssloaders)
 
 
 server <- function(input, output, session){
+  
+  showPageSpinner(type = 6, caption = "Collecting data...")
 
 # Datasets ----------------------------------------------------------------
 
-  # db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach") 
-  db_con <- dh_createCon("cockroach")
+  db_con <- if(Sys.info()["nodename"] == "Olivers-MacBook-Pro.local") dh_createCon("postgres") else dh_createCon("cockroach")
   df_preds <- dh_getQuery(db_con, "SELECT * FROM anl.pts_prediction") |> 
     mutate(pred_bin = cut(pts_prediction, seq(0, 100, 10), ordered_result = TRUE))
 
+  hidePageSpinner()
 
 # Update dynamic widgets --------------------------------------------------
 
@@ -25,12 +28,13 @@ server <- function(input, output, session){
 
   output$pts_predictions <- renderDT({
     
-    df_preds |> 
+    filter(df_preds, pts_actual != "did not play" | is.na(pts_actual)) |> 
       select(game_date, player, team = team_slug, opponent, pts_prediction, pts_actual) |> 
       arrange(desc(game_date), team, player) |> 
       mutate(
+        pts_actual = as.numeric(pts_actual),
         pts_prediction = round(pts_prediction),
-        diff = abs(pts_prediction - as.numeric(pts_actual))
+        diff = abs(pts_prediction - pts_actual)
       )
     
   }, options = list(filter = NULL))
@@ -38,8 +42,8 @@ server <- function(input, output, session){
   
   output$model_monitoring_plot <- renderPlot({
     
-    sbtl <- if(input$pred_bin_select == "All") ", for all predictions"
-      else paste(", for predictions between", input$pred_bin_select, "points")
+    sbtl <- if(input$pred_bin_select == "All") "; for all predictions"
+      else paste("; for predictions between", input$pred_bin_select, "points")
     
     df <- if(input$pred_bin_select == "All") df_preds
       else filter(df_preds, pred_bin == input$pred_bin_select)
@@ -54,10 +58,16 @@ server <- function(input, output, session){
     ggplot(df, aes(x = game_date, y = mae)) +
       geom_point(colour = "blue") +
       geom_path(colour = "blue") +
-      geom_errorbar(aes(ymin = mae - mae_se, ymax = mae + mae_se), width = 0.1) +
+      geom_errorbar(aes(ymin = mae - mae_se, ymax = mae + mae_se), width = 0.05) +
       ylim(c(0, 15)) +
       theme_bw() +
-      labs(title = "Points Prediction Model", subtitle = paste0("Model Performance Tracking", sbtl), x = NULL, y = "Mean Absolute Error")
+      labs(title = "Points Prediction Model", subtitle = paste0("Model Performance Tracking", sbtl), x = NULL, y = "Mean Absolute Error") +
+      theme(
+        axis.text = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25),
+        plot.subtitle = element_text(size = 20)
+      )
     
     
   })

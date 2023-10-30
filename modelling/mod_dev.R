@@ -106,6 +106,8 @@ df_test <- df_test |>
     pred_bins = cut(preds, breaks = c(-10, 0, 10, 20, 30, 40))
   )
 
+# save.image()
+
 # Results -----------------------------------------------------------------
 
 mae(df_test, pts, preds)

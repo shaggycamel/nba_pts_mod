@@ -1,6 +1,7 @@
 
 library(nba.dataRub)
 library(tidyverse)
+library(tidymodels)
 library(DBI)
 
 db_con <- dh_createCon("cockroach")
