@@ -34,7 +34,14 @@ server <- function(input, output, session){
       mutate(
         pts_actual = as.numeric(pts_actual),
         pts_prediction = round(pts_prediction),
-        diff = abs(pts_prediction - pts_actual)
+        error_perc = if_else(pts_actual == 0, pts_prediction, (1 - (pts_prediction / pts_actual)) * -1),
+        error_direction = case_when(
+          error_perc < 0 ~ "under",
+          error_perc > 0 ~ "over",
+          error_perc == 0 ~ "spot-on",
+          .default = NA_character_
+        ),
+        error_perc = round(abs(error_perc), 2)
       )
     
   }, options = list(filter = NULL))

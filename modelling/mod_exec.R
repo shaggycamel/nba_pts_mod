@@ -7,6 +7,13 @@ library(DBI)
 
 db_con <- dh_createCon("cockroach")
 best_fit <- readRDS("best_fit.RDS")
+cur_date <- as.Date(as.POSIXct(Sys.time(), tz="NZ"))
+
+# Has latest data been collected? -----------------------------------------
+
+if(nrow(dh_getQuery(db_con, "check_update_log.sql")) > 0){
+  stop("nba.player_game_log has not been updated. Model execution will cease...")
+}
 
 
 # New Predictions ---------------------------------------------------------
