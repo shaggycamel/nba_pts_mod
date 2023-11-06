@@ -1,0 +1,23 @@
+/usr/local/lib/R/bin/R: line 8: uname: command not found
+- The project is out-of-sync -- use `renv::status()` for details.
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Joining with `by = join_by(game_id)`
+Joining with `by = join_by(game_id, player_id)`
+<PqResult>
+  SQL  DELETE FROM anl.pts_prediction WHERE game_id IN (22300142, 22300140, 22300141, 22300144, 22300143)
+  ROWS Fetched: 0 [complete]
+       Changed: 198
+Warning message:
+Closing open result set, cancelling previous query 
+[1] "Added predictions for games played on: 2023-11-05"
+sh: 1: rm: not found

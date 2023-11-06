@@ -55,4 +55,4 @@ dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN 
 dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
 dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
 
-print(paste("Added predictions for games played on:", cur_date - 1))
+print(paste("Added predictions for games played on:", cur_date))
