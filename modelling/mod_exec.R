@@ -56,8 +56,8 @@ df_actual <- select(df_actual, -pts_actual) |>
 
 # Ingestion of data -------------------------------------------------------
 
-# dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN ({game_ids})"))
-# dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
-# dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
+dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN ({game_ids})"))
+dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
+dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
 
 print(paste("Added predictions for games played on:", game_date, "(US date)."))
