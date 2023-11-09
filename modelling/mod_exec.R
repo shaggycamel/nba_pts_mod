@@ -7,8 +7,8 @@ library(DBI)
 
 db_con <- dh_createCon("cockroach")
 best_fit <- readRDS("best_fit.RDS")
-cur_date <-  as.Date(as.POSIXct(Sys.time(), tz="NZ"))
-game_date <- cur_date - 1
+game_date <- as.character(as.Date(Sys.Date(), tz = "NZ") - 1)
+
 
 # Has latest data been collected? -----------------------------------------
 
