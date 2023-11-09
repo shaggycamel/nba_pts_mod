@@ -7,8 +7,8 @@ library(DBI)
 
 db_con <- dh_createCon("cockroach")
 best_fit <- readRDS("best_fit.RDS")
-game_date <- as.character(as.Date(Sys.Date(), tz = "NZ") - 1)
-
+game_date <- if(Sys.info()["nodename"] == "raspberrypi") as.Date(Sys.Date()) else as.Date(Sys.Date()) - 1
+# game_date <- game_date - 1 # manual intervention
 
 # Has latest data been collected? -----------------------------------------
 
@@ -56,8 +56,8 @@ df_actual <- select(df_actual, -pts_actual) |>
 
 # Ingestion of data -------------------------------------------------------
 
-dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN ({game_ids})"))
-dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
-dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
+# dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN ({game_ids})"))
+# dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
+# dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
 
-print(paste("Added predictions for games played on:", game_date))
+print(paste("Added predictions for games played on:", game_date, "(US date)."))
