@@ -7,7 +7,8 @@ library(DBI)
 
 db_con <- dh_createCon("cockroach")
 best_fit <- readRDS("best_fit.RDS")
-cur_date <- as.Date(as.POSIXct(Sys.time(), tz="NZ"))
+cur_date <-  as.Date(as.POSIXct(Sys.time(), tz="NZ"))
+game_date <- cur_date - 1
 
 # Has latest data been collected? -----------------------------------------
 
@@ -20,16 +21,20 @@ if(nrow(dbGetQuery(db_con, glue::glue(readr::read_file(here::here("queries", "ch
 
 df_pred <- na.omit(dh_getQuery(db_con, "pred_prep.sql"))
 
-# Need to break these steps up so df_pred can be referenced in predict
-df_pred <- mutate(df_pred, next_pts_pred = predict(best_fit, df_pred)[[1]]) |> 
-  left_join(dh_getQuery(db_con, "post_pred_clean.sql"), by = join_by(player_id)) |> 
-  left_join(dh_getQuery(db_con, "SELECT game_id, slug_matchup FROM nba.league_game_schedule")) |> 
-  mutate(
-    opponent = str_remove(str_remove(slug_matchup, team_slug), " @ | vs. "),
-    pts_actual = NA_character_, # set as char so "did not play" can be included
-  ) |>
-  relocate(c(player, team_slug, opponent), .after = player_id) |> 
-  select(-slug_matchup, pts_prediction = next_pts_pred)
+if(nrow(df_pred) > 0) {
+  # Need to break these steps up so df_pred can be referenced in predict
+  df_pred <- mutate(df_pred, next_pts_pred = predict(best_fit, df_pred)[[1]]) |> 
+    left_join(dh_getQuery(db_con, "post_pred_clean.sql"), by = join_by(player_id)) |> 
+    left_join(dh_getQuery(db_con, "SELECT game_id, slug_matchup FROM nba.league_game_schedule")) |> 
+    mutate(
+      opponent = str_remove(str_remove(slug_matchup, team_slug), " @ | vs. "),
+      pts_actual = NA_character_, # set as char so "did not play" can be included
+    ) |>
+    relocate(c(player, team_slug, opponent), .after = player_id) |> 
+    select(-slug_matchup, pts_prediction = next_pts_pred)
+} else {
+  cat("No games being played...nothing to predict")
+}
 
 # Run ingestion step last so df_actual query can work (WHERE pts_actual IS NULL)
 
@@ -55,4 +60,4 @@ dbSendQuery(db_con, glue::glue("DELETE FROM anl.pts_prediction WHERE game_id IN 
 dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_actual, append = TRUE)
 dbWriteTable(db_con, Id(schema = "anl", table = "pts_prediction"), df_pred, append = TRUE)
 
-print(paste("Added predictions for games played on:", cur_date - 1))
+print(paste("Added predictions for games played on:", game_date))

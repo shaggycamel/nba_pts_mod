@@ -45,7 +45,9 @@ cte_prior_game_log AS (
     LEFT JOIN cte_team_latest_roster AS roster ON log.slug_season = roster.slug_season
         AND log.player_id = roster.player_id
     WHERE log.slug_season >= '2022-23'
+--        AND log.game_date <= '2023-11-08' -- manual intervention
 ),
+
 
 
 -- A cte creating a dummy object of teams playing tomorrow, but
@@ -85,9 +87,9 @@ cte_tomorrow_game_log AS (
         
     FROM cte_team_latest_roster AS roster
     INNER JOIN (    
-        SELECT slug_season, slug_matchup, LEFT(slug_matchup, 3) AS team_slug, game_date, game_id FROM nba.league_game_schedule WHERE game_date = (SELECT MAX(game_date) + 1 FROM cte_prior_game_log)
+        SELECT slug_season, slug_matchup, LEFT(slug_matchup, 3) AS team_slug, game_date, game_id FROM nba.league_game_schedule WHERE game_date = '{game_date}'
         UNION ALL
-        SELECT slug_season, slug_matchup, RIGHT(slug_matchup, 3) AS team_slug, game_date, game_id FROM nba.league_game_schedule WHERE game_date = (SELECT MAX(game_date) + 1 FROM cte_prior_game_log)
+        SELECT slug_season, slug_matchup, RIGHT(slug_matchup, 3) AS team_slug, game_date, game_id FROM nba.league_game_schedule WHERE game_date = '{game_date}'
     ) AS team_tomorrow ON roster.slug_season = team_tomorrow.slug_season
         AND roster.team_slug = team_tomorrow.team_slug
 ),
