@@ -45,7 +45,7 @@ cte_prior_game_log AS (
     LEFT JOIN cte_team_latest_roster AS roster ON log.slug_season = roster.slug_season
         AND log.player_id = roster.player_id
     WHERE log.slug_season >= '2022-23'
---        AND log.game_date <= '{game_date}' -- manual intervention
+        AND log.game_date < '{game_date}'
 ),
 
 
