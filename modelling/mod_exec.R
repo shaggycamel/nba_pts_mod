@@ -12,7 +12,7 @@ game_date <- if(Sys.info()["nodename"] == "raspberrypi") as.Date(Sys.Date()) els
 
 # Has latest data been collected? -----------------------------------------
 
-if(nrow(dbGetQuery(db_con, glue::glue(readr::read_file(here::here("queries", "check_update_log.sql"))))) > 0){
+if(nrow(dh_getQuery(db_con, "check_update_log.sql")) > 0){
   stop("nba.player_game_log has not been updated. Model execution will cease...")
 }
 
